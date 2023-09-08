@@ -1,0 +1,222 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Parameters:
+  ApiName:
+    Type: String
+    Default: VtlAppSyncApi
+  TableArn:
+    Description: Arn della tabella "ProductsTable"
+    Type: String
+    Default: arn:aws:dynamodb:eu-west-1:923125397052:table/ProductsTable
+  TableName:
+    Type: String
+    Default: ProductsTable
+Resources:
+  AppSyncDDBRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - sts:AssumeRole
+          Principal:
+            Service:
+            - appsync.amazonaws.com
+      Policies:
+      - PolicyName: DDBAccess
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - dynamodb:UpdateItem
+            - dynamodb:GetItem
+            - dynamodb:Query
+            Resource:
+              Ref: TableArn
+  AppsyncCloudWatchRole:
+    Type: AWS::IAM::Role
+    Properties:
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSAppSyncPushToCloudWatchLogs
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - sts:AssumeRole
+          Principal:
+            Service:
+            - appsync.amazonaws.com
+  GraphQLApi:
+    Type: AWS::AppSync::GraphQLApi
+    Properties:
+      Name:
+        Ref: ApiName
+      AuthenticationType: API_KEY
+      LogConfig:
+        CloudWatchLogsRoleArn:
+          Fn::GetAtt:
+          - AppsyncCloudWatchRole
+          - Arn
+        FieldLogLevel: ALL
+  GraphQLApiSchema:
+    Type: AWS::AppSync::GraphQLSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      Definition: "schema {\n  query: Query\n  mutation: Mutation\n}\ntype Product\
+        \ {\n  PK: String!\n  SK: String!\n  Type: String\n  Price: Float\n}\ntype\
+        \ Brand {\n  PK: String!\n  SK: String!\n  LastModified: String\n}\ntype Mutation\
+        \ {\n  updateProduct(SK: String!, Type: String, Price: Float): Product!\n\
+        \  updateBrand(SK: String!): Brand!\n}\ntype Query {\n  productsList: [Product]!\n\
+        \  getProduct(PK: String!, SK: String!): Product!\n  productsByBrand(SK: String!):\
+        \ [Product]!\n  brandsList: [Brand]!\n}\n"
+  GraphQLDataSource:
+    Type: AWS::AppSync::DataSource
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      Name: dynamoDB
+      Type: AMAZON_DYNAMODB
+      ServiceRoleArn:
+        Fn::GetAtt:
+        - AppSyncDDBRole
+        - Arn
+      DynamoDBConfig:
+        AwsRegion:
+          Fn::Sub: ${AWS::Region}
+        TableName:
+          Ref: TableName
+  UpdateProductResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLApiSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Mutation
+      FieldName: updateProduct
+      DataSourceName:
+        Fn::GetAtt:
+        - GraphQLDataSource
+        - Name
+      RequestMappingTemplate: "{\n  \"version\": \"2017-02-28\",\n  \"operation\"\
+        : \"UpdateItem\",\n  \"key\": {\n    \"PK\": $util.dynamodb.toDynamoDBJson(\"\
+        Product\"),\n    \"SK\": $util.dynamodb.toDynamoDBJson($ctx.args.SK)\n  },\n\
+        \  \"update\": {\n    \"expression\": \"SET #Type = :Type, #Price = :Price\"\
+        ,\n    \"expressionNames\": {\n      \"#Type\": \"Type\",\n      \"#Price\"\
+        : \"Price\"\n    },\n    \"expressionValues\": {\n      \":Type\": $util.dynamodb.toDynamoDBJson($ctx.args.Type),\n\
+        \      \":Price\": $util.dynamodb.toDynamoDBJson($ctx.args.Price)\n    }\n\
+        \  }\n}\n"
+      ResponseMappingTemplate: $util.toJson($context.result)
+  UpdateBrandResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLApiSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Mutation
+      FieldName: updateBrand
+      DataSourceName:
+        Fn::GetAtt:
+        - GraphQLDataSource
+        - Name
+      RequestMappingTemplate: "{\n  \"version\": \"2017-02-28\",\n  \"operation\"\
+        : \"UpdateItem\",\n  \"key\": {\n    \"PK\": {\n      \"S\": \"Brand\"\n \
+        \   },\n    \"SK\": $util.dynamodb.toDynamoDBJson($ctx.args.SK)\n  },\n  \"\
+        update\": {\n    \"expression\": \"SET LastModified = :Date\",\n    \"expressionValues\"\
+        : {\n      \":Date\": $util.dynamodb.toDynamoDBJson($util.time.nowISO8601())\n\
+        \    }\n  }\n}\n"
+      ResponseMappingTemplate: $util.toJson($context.result)
+  ProductsListResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLApiSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Query
+      FieldName: productsList
+      DataSourceName:
+        Fn::GetAtt:
+        - GraphQLDataSource
+        - Name
+      RequestMappingTemplate: "{\n  \"version\": \"2017-02-28\",\n  \"operation\"\
+        : \"Query\",\n  \"query\":{\n    \"expression\": \"PK = :Product\",\n    \"\
+        expressionValues\": {\n      \":Product\": {\n        \"S\": \"Product\"\n\
+        \      }\n    }\n  }\n}\n"
+      ResponseMappingTemplate: $util.toJson($context.result.items)
+  GetProductResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLApiSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Query
+      FieldName: getProduct
+      DataSourceName:
+        Fn::GetAtt:
+        - GraphQLDataSource
+        - Name
+      RequestMappingTemplate: "{\n  \"version\": \"2017-02-28\",\n  \"operation\"\
+        : \"GetItem\",\n  \"key\": {\n    \"PK\": $util.dynamodb.toDynamoDBJson($ctx.args.PK),\n\
+        \    \"SK\": $util.dynamodb.toDynamoDBJson($ctx.args.SK),\n  },\n}\n"
+      ResponseMappingTemplate: $util.toJson($context.result)
+  ProductsByBrandResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLApiSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Query
+      FieldName: productsByBrand
+      DataSourceName:
+        Fn::GetAtt:
+        - GraphQLDataSource
+        - Name
+      RequestMappingTemplate: "{\n  \"version\": \"2017-02-28\",\n  \"operation\"\
+        : \"Query\",\n  \"query\": {\n    \"expression\": \"PK = :PK AND begins_with(SK,\
+        \ :SK)\",\n    \"expressionValues\": {\n      \":PK\": {\n        \"S\": \"\
+        Product\"\n      },\n      \":SK\": $util.dynamodb.toDynamoDBJson($ctx.args.SK)\n\
+        \    }\n  }\n}\n"
+      ResponseMappingTemplate: $util.toJson($context.result.items)
+  BrandsListResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQLApiSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      TypeName: Query
+      FieldName: brandsList
+      DataSourceName:
+        Fn::GetAtt:
+        - GraphQLDataSource
+        - Name
+      RequestMappingTemplate: "{\n  \"version\": \"2017-02-28\",\n  \"operation\"\
+        : \"Query\",\n  \"query\": {\n    \"expression\": \"PK = :PK\",\n    \"expressionValues\"\
+        : {\n      \":PK\": {\n        \"S\": \"Brand\"\n      }\n    }\n  }\n}\n"
+      ResponseMappingTemplate: $util.toJson($context.result.items)
+  APIKey:
+    Type: AWS::AppSync::ApiKey
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
