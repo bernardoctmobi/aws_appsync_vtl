@@ -1,9 +1,0 @@
-version = 0.1
-[default.deploy.parameters]
-stack_name = "appsync-exercise-vtl"
-resolve_s3 = true
-s3_prefix = "appsync-exercise-vtl"
-region = "eu-west-1"
-capabilities = "CAPABILITY_IAM"
-parameter_overrides = "ApiName=\"VtlAppSyncApi\" TableArn=\"arn:aws:dynamodb:eu-west-1:923125397052:table/ProductsTable\" TableName=\"ProductsTable\""
-image_repositories = []
