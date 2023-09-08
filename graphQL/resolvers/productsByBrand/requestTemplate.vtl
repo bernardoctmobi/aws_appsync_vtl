@@ -1,0 +1,13 @@
+{
+  "version": "2017-02-28",
+  "operation": "Query",
+  "query": {
+    "expression": "PK = :PK AND begins_with(SK, :SK)",
+    "expressionValues": {
+      ":PK": {
+        "S": "Product"
+      },
+      ":SK": $util.dynamodb.toDynamoDBJson($ctx.args.SK)
+    }
+  }
+}

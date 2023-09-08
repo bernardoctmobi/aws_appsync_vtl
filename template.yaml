@@ -66,32 +66,7 @@ Resources:
     Type: AWS::AppSync::GraphQLSchema
     Properties:
       ApiId: !GetAtt GraphQLApi.ApiId
-      Definition: |
-        schema {
-          query: Query
-          mutation: Mutation
-        }
-        type Product {
-          PK: String!
-          SK: String!
-          Type: String
-          Price: Float
-        }
-        type Brand {
-          PK: String!
-          SK: String!
-          LastModified: String
-        }
-        type Mutation {
-          updateProduct(SK: String!, Type: String, Price: Float): Product!
-          updateBrand(SK: String!): Brand!
-        }
-        type Query {
-          productsList: [Product]!
-          getProduct(PK: String!, SK: String!): Product!
-          productsByBrand(SK: String!): [Product]!
-          brandsList: [Brand]!
-        }
+      DefinitionS3Location: ./graphQL/graphqlschema.vtl
 
   GraphQLDataSource:
     Type: AWS::AppSync::DataSource
@@ -112,27 +87,8 @@ Resources:
       TypeName: Mutation
       FieldName: updateProduct
       DataSourceName: !GetAtt GraphQLDataSource.Name
-      RequestMappingTemplate: >
-        {
-          "version": "2017-02-28",
-          "operation": "UpdateItem",
-          "key": {
-            "PK": $util.dynamodb.toDynamoDBJson("Product"),
-            "SK": $util.dynamodb.toDynamoDBJson($ctx.args.SK)
-          },
-          "update": {
-            "expression": "SET #Type = :Type, #Price = :Price",
-            "expressionNames": {
-              "#Type": "Type",
-              "#Price": "Price"
-            },
-            "expressionValues": {
-              ":Type": $util.dynamodb.toDynamoDBJson($ctx.args.Type),
-              ":Price": $util.dynamodb.toDynamoDBJson($ctx.args.Price)
-            }
-          }
-        }
-      ResponseMappingTemplate: $util.toJson($context.result)
+      RequestMappingTemplateS3Location: ./graphQL/resolvers/updateProduct/requestTemplate.vtl
+      ResponseMappingTemplateS3Location: ./graphQL/resolvers/updateProduct/responseTemplate.vtl
 
   UpdateBrandResolver:
     Type: AWS::AppSync::Resolver
@@ -142,24 +98,8 @@ Resources:
       TypeName: Mutation
       FieldName: updateBrand
       DataSourceName: !GetAtt GraphQLDataSource.Name
-      RequestMappingTemplate: >
-        {
-          "version": "2017-02-28",
-          "operation": "UpdateItem",
-          "key": {
-            "PK": {
-              "S": "Brand"
-            },
-            "SK": $util.dynamodb.toDynamoDBJson($ctx.args.SK)
-          },
-          "update": {
-            "expression": "SET LastModified = :Date",
-            "expressionValues": {
-              ":Date": $util.dynamodb.toDynamoDBJson($util.time.nowISO8601())
-            }
-          }
-        }
-      ResponseMappingTemplate: $util.toJson($context.result)
+      RequestMappingTemplateS3Location: ./graphQL/resolvers/updateBrand/requestTemplate.vtl
+      ResponseMappingTemplateS3Location: ./graphQL/resolvers/updateBrand/responseTemplate.vtl
 
   ProductsListResolver:
     Type: AWS::AppSync::Resolver
@@ -169,20 +109,8 @@ Resources:
       TypeName: Query
       FieldName: productsList
       DataSourceName: !GetAtt GraphQLDataSource.Name
-      RequestMappingTemplate: >
-        {
-          "version": "2017-02-28",
-          "operation": "Query",
-          "query":{
-            "expression": "PK = :Product",
-            "expressionValues": {
-              ":Product": {
-                "S": "Product"
-              }
-            }
-          }
-        }
-      ResponseMappingTemplate: $util.toJson($context.result.items)
+      RequestMappingTemplateS3Location: ./graphQL/resolvers/listProducts/requestTemplate.vtl
+      ResponseMappingTemplateS3Location: ./graphQL/resolvers/listProducts/responseTemplate.vtl
 
   GetProductResolver:
     Type: AWS::AppSync::Resolver
@@ -192,16 +120,8 @@ Resources:
       TypeName: Query
       FieldName: getProduct
       DataSourceName: !GetAtt GraphQLDataSource.Name
-      RequestMappingTemplate: >
-        {
-          "version": "2017-02-28",
-          "operation": "GetItem",
-          "key": {
-            "PK": $util.dynamodb.toDynamoDBJson($ctx.args.PK),
-            "SK": $util.dynamodb.toDynamoDBJson($ctx.args.SK),
-          },
-        }
-      ResponseMappingTemplate: $util.toJson($context.result)
+      RequestMappingTemplateS3Location: ./graphQL/resolvers/getProduct/requestTemplate.vtl
+      ResponseMappingTemplateS3Location: ./graphQL/resolvers/getProduct/responseTemplate.vtl
 
   ProductsByBrandResolver:
     Type: AWS::AppSync::Resolver
@@ -211,21 +131,8 @@ Resources:
       TypeName: Query
       FieldName: productsByBrand
       DataSourceName: !GetAtt GraphQLDataSource.Name
-      RequestMappingTemplate: >
-        {
-          "version": "2017-02-28",
-          "operation": "Query",
-          "query": {
-            "expression": "PK = :PK AND begins_with(SK, :SK)",
-            "expressionValues": {
-              ":PK": {
-                "S": "Product"
-              },
-              ":SK": $util.dynamodb.toDynamoDBJson($ctx.args.SK)
-            }
-          }
-        }
-      ResponseMappingTemplate: $util.toJson($context.result.items)
+      RequestMappingTemplateS3Location: ./graphQL/resolvers/productsByBrand/requestTemplate.vtl
+      ResponseMappingTemplateS3Location: ./graphQL/resolvers/productsByBrand/responseTemplate.vtl
 
   BrandsListResolver:
     Type: AWS::AppSync::Resolver
@@ -235,20 +142,8 @@ Resources:
       TypeName: Query
       FieldName: brandsList
       DataSourceName: !GetAtt GraphQLDataSource.Name
-      RequestMappingTemplate: >
-        {
-          "version": "2017-02-28",
-          "operation": "Query",
-          "query": {
-            "expression": "PK = :PK",
-            "expressionValues": {
-              ":PK": {
-                "S": "Brand"
-              }
-            }
-          }
-        }
-      ResponseMappingTemplate: $util.toJson($context.result.items)
+      RequestMappingTemplateS3Location: ./graphQL/resolvers/listBrands/requestTemplate.vtl
+      ResponseMappingTemplateS3Location: ./graphQL/resolvers/listBrands/responseTemplate.vtl
 
   APIKey:
     Type: AWS::AppSync::ApiKey

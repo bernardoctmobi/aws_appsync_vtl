@@ -69,13 +69,7 @@ Resources:
         Fn::GetAtt:
         - GraphQLApi
         - ApiId
-      Definition: "schema {\n  query: Query\n  mutation: Mutation\n}\ntype Product\
-        \ {\n  PK: String!\n  SK: String!\n  Type: String\n  Price: Float\n}\ntype\
-        \ Brand {\n  PK: String!\n  SK: String!\n  LastModified: String\n}\ntype Mutation\
-        \ {\n  updateProduct(SK: String!, Type: String, Price: Float): Product!\n\
-        \  updateBrand(SK: String!): Brand!\n}\ntype Query {\n  productsList: [Product]!\n\
-        \  getProduct(PK: String!, SK: String!): Product!\n  productsByBrand(SK: String!):\
-        \ [Product]!\n  brandsList: [Brand]!\n}\n"
+      DefinitionS3Location: ..\..\graphQL\graphqlschema.vtl
   GraphQLDataSource:
     Type: AWS::AppSync::DataSource
     Properties:
@@ -108,15 +102,8 @@ Resources:
         Fn::GetAtt:
         - GraphQLDataSource
         - Name
-      RequestMappingTemplate: "{\n  \"version\": \"2017-02-28\",\n  \"operation\"\
-        : \"UpdateItem\",\n  \"key\": {\n    \"PK\": $util.dynamodb.toDynamoDBJson(\"\
-        Product\"),\n    \"SK\": $util.dynamodb.toDynamoDBJson($ctx.args.SK)\n  },\n\
-        \  \"update\": {\n    \"expression\": \"SET #Type = :Type, #Price = :Price\"\
-        ,\n    \"expressionNames\": {\n      \"#Type\": \"Type\",\n      \"#Price\"\
-        : \"Price\"\n    },\n    \"expressionValues\": {\n      \":Type\": $util.dynamodb.toDynamoDBJson($ctx.args.Type),\n\
-        \      \":Price\": $util.dynamodb.toDynamoDBJson($ctx.args.Price)\n    }\n\
-        \  }\n}\n"
-      ResponseMappingTemplate: $util.toJson($context.result)
+      RequestMappingTemplateS3Location: ..\..\graphQL\resolvers\updateProduct\requestTemplate.vtl
+      ResponseMappingTemplateS3Location: ..\..\graphQL\resolvers\updateProduct\responseTemplate.vtl
   UpdateBrandResolver:
     Type: AWS::AppSync::Resolver
     DependsOn: GraphQLApiSchema
@@ -131,13 +118,8 @@ Resources:
         Fn::GetAtt:
         - GraphQLDataSource
         - Name
-      RequestMappingTemplate: "{\n  \"version\": \"2017-02-28\",\n  \"operation\"\
-        : \"UpdateItem\",\n  \"key\": {\n    \"PK\": {\n      \"S\": \"Brand\"\n \
-        \   },\n    \"SK\": $util.dynamodb.toDynamoDBJson($ctx.args.SK)\n  },\n  \"\
-        update\": {\n    \"expression\": \"SET LastModified = :Date\",\n    \"expressionValues\"\
-        : {\n      \":Date\": $util.dynamodb.toDynamoDBJson($util.time.nowISO8601())\n\
-        \    }\n  }\n}\n"
-      ResponseMappingTemplate: $util.toJson($context.result)
+      RequestMappingTemplateS3Location: ..\..\graphQL\resolvers\updateBrand\requestTemplate.vtl
+      ResponseMappingTemplateS3Location: ..\..\graphQL\resolvers\updateBrand\responseTemplate.vtl
   ProductsListResolver:
     Type: AWS::AppSync::Resolver
     DependsOn: GraphQLApiSchema
@@ -152,11 +134,8 @@ Resources:
         Fn::GetAtt:
         - GraphQLDataSource
         - Name
-      RequestMappingTemplate: "{\n  \"version\": \"2017-02-28\",\n  \"operation\"\
-        : \"Query\",\n  \"query\":{\n    \"expression\": \"PK = :Product\",\n    \"\
-        expressionValues\": {\n      \":Product\": {\n        \"S\": \"Product\"\n\
-        \      }\n    }\n  }\n}\n"
-      ResponseMappingTemplate: $util.toJson($context.result.items)
+      RequestMappingTemplateS3Location: ..\..\graphQL\resolvers\listProducts\requestTemplate.vtl
+      ResponseMappingTemplateS3Location: ..\..\graphQL\resolvers\listProducts\responseTemplate.vtl
   GetProductResolver:
     Type: AWS::AppSync::Resolver
     DependsOn: GraphQLApiSchema
@@ -171,10 +150,8 @@ Resources:
         Fn::GetAtt:
         - GraphQLDataSource
         - Name
-      RequestMappingTemplate: "{\n  \"version\": \"2017-02-28\",\n  \"operation\"\
-        : \"GetItem\",\n  \"key\": {\n    \"PK\": $util.dynamodb.toDynamoDBJson($ctx.args.PK),\n\
-        \    \"SK\": $util.dynamodb.toDynamoDBJson($ctx.args.SK),\n  },\n}\n"
-      ResponseMappingTemplate: $util.toJson($context.result)
+      RequestMappingTemplateS3Location: ..\..\graphQL\resolvers\getProduct\requestTemplate.vtl
+      ResponseMappingTemplateS3Location: ..\..\graphQL\resolvers\getProduct\responseTemplate.vtl
   ProductsByBrandResolver:
     Type: AWS::AppSync::Resolver
     DependsOn: GraphQLApiSchema
@@ -189,12 +166,8 @@ Resources:
         Fn::GetAtt:
         - GraphQLDataSource
         - Name
-      RequestMappingTemplate: "{\n  \"version\": \"2017-02-28\",\n  \"operation\"\
-        : \"Query\",\n  \"query\": {\n    \"expression\": \"PK = :PK AND begins_with(SK,\
-        \ :SK)\",\n    \"expressionValues\": {\n      \":PK\": {\n        \"S\": \"\
-        Product\"\n      },\n      \":SK\": $util.dynamodb.toDynamoDBJson($ctx.args.SK)\n\
-        \    }\n  }\n}\n"
-      ResponseMappingTemplate: $util.toJson($context.result.items)
+      RequestMappingTemplateS3Location: ..\..\graphQL\resolvers\productsByBrand\requestTemplate.vtl
+      ResponseMappingTemplateS3Location: ..\..\graphQL\resolvers\productsByBrand\responseTemplate.vtl
   BrandsListResolver:
     Type: AWS::AppSync::Resolver
     DependsOn: GraphQLApiSchema
@@ -209,10 +182,8 @@ Resources:
         Fn::GetAtt:
         - GraphQLDataSource
         - Name
-      RequestMappingTemplate: "{\n  \"version\": \"2017-02-28\",\n  \"operation\"\
-        : \"Query\",\n  \"query\": {\n    \"expression\": \"PK = :PK\",\n    \"expressionValues\"\
-        : {\n      \":PK\": {\n        \"S\": \"Brand\"\n      }\n    }\n  }\n}\n"
-      ResponseMappingTemplate: $util.toJson($context.result.items)
+      RequestMappingTemplateS3Location: ..\..\graphQL\resolvers\listBrands\requestTemplate.vtl
+      ResponseMappingTemplateS3Location: ..\..\graphQL\resolvers\listBrands\responseTemplate.vtl
   APIKey:
     Type: AWS::AppSync::ApiKey
     Properties:
